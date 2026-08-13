@@ -3,6 +3,10 @@ message: "If you use this software, please cite it as below."
 type: software
 title: "espeak-ng-wasm: Reproducible WebAssembly builds of eSpeak NG for browser-based IPA-input speech synthesis"
 authors:
+  - family-names: Fang
+    given-names: Xinjie
+    orcid: "https://orcid.org/XXXX-XXXX-XXXX-XXXX"   # TODO: fill in ORCID iD once issued
+    affiliation: "Classical Cat Digital Humanities Lab"
   - name: "Classical Cat Digital Humanities Lab"
     website: "https://github.com/classical-cat-dh-lab"
 repository-code: "https://github.com/classical-cat-dh-lab/espeak-ng-wasm"
