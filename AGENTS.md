@@ -15,8 +15,12 @@ Chinese-language ops content.
 - **GPLv3 discipline**: artifacts are eSpeak NG derivatives. LICENSE stays at repo
   root and ships with releases; upstream attribution (Isaacson, Pettarin) stays in
   README. Never remove.
-- **No secrets in this repo, ever.** The GitHub token lives at `../.gh-lab.env`
-  (outside the repo); the credential helper only references that path.
+- **No secrets in this repo, ever.** Push credentials live outside the repo on the
+  maintainer's machine (OS keychain, read by a local credential helper); tokens never
+  touch `.git/config`, files in this repo, or conversation plaintext.
+- **This file is public.** Content rule: contribution/build/test rules only — nothing
+  here may reveal internal ops topology (credential locations, infra layout, account
+  structure). Internal ops details live in the lab's private ops docs, never here.
 - **Deterministic paths**: data trimming is scripted (`trim-data.sh`), never manual;
   builds pin upstream tag + emsdk version and record them in `manifest.json`.
 - **Long builds** run via `nohup ... > build.log 2>&1 &` + manual tailing, never as
