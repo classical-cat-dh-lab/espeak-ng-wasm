@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Secrets — never commit (token lives outside the repo at ../.gh-lab.env)
+.env
+.env.*
+*.env
+
+# Build artifacts (released via GitHub Releases, not committed)
+build/
+dist/
+emsdk/
+*.wasm
+*.data
+*.log
+
+# Upstream source (referenced by pinned tag, fetched by build.sh)
+espeak-ng/

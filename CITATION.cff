@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "espeak-ng-wasm: Reproducible WebAssembly builds of eSpeak NG for browser-based IPA-input speech synthesis"
+authors:
+  - name: "Classical Cat Digital Humanities Lab"
+    website: "https://github.com/classical-cat-dh-lab"
+repository-code: "https://github.com/classical-cat-dh-lab/espeak-ng-wasm"
+license: GPL-3.0-or-later
+keywords:
+  - text-to-speech
+  - webassembly
+  - espeak-ng
+  - IPA
+  - digital humanities
+  - classical languages
