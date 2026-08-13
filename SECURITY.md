@@ -27,3 +27,10 @@ with you after a fix is available.
   [espeak-ng/espeak-ng](https://github.com/espeak-ng/espeak-ng/security).
 - Released artifacts ship with `sha256sums.txt`; always verify checksums when
   vendoring.
+
+## Commit Signing
+
+Commits on the default branch are signed with the maintainer's SSH signing key
+(ed25519) and show GitHub's **Verified** badge. Releases are cut from signed,
+annotated tags. If a commit on `main` ever appears without a valid signature,
+treat the repository state as suspect and report it via the channel above.
