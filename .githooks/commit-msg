@@ -1,0 +1,23 @@
+#!/bin/sh
+# commit-msg hook — attribution guard for this public repo.
+#
+# Policy: AI assistants may be used during development, but they are never
+# listed as authors or co-authors (an AI cannot hold copyright or sign
+# provenance), and AI-vendor names must not appear in commit messages.
+#
+# Installed via: git config core.hooksPath .githooks
+
+msg_file="$1"
+
+if grep -qiE 'co-authored-by:.*(claude|anthropic|openai|chatgpt|gpt|copilot|gemini|deepseek|kimi|moonshot|grok|qwen)' "$msg_file"; then
+  echo "commit-msg hook: AI co-author trailers are forbidden in this repo." >&2
+  echo "Remove the Co-Authored-By line and commit again." >&2
+  exit 1
+fi
+
+if grep -qiE 'claude|anthropic' "$msg_file"; then
+  echo "commit-msg hook: AI vendor names are forbidden in commit messages." >&2
+  exit 1
+fi
+
+exit 0

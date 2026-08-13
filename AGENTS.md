@@ -21,6 +21,11 @@ Chinese-language ops content.
 - **This file is public.** Content rule: contribution/build/test rules only — nothing
   here may reveal internal ops topology (credential locations, infra layout, account
   structure). Internal ops details live in the lab's private ops docs, never here.
+- **Attribution rule**: commits are authored solely by the human maintainer. No AI
+  co-author trailers and no AI-vendor names in commit messages, tag objects, or
+  tracked files — ever, in any revision. Enforced by `.githooks/commit-msg`
+  (activate with `git config core.hooksPath .githooks`); run
+  `scripts/audit-public-history.sh` before publishing or re-publishing any ref.
 - **Deterministic paths**: data trimming is scripted (`trim-data.sh`), never manual;
   builds pin upstream tag + emsdk version and record them in `manifest.json`.
 - **Long builds** run via `nohup ... > build.log 2>&1 &` + manual tailing, never as
