@@ -37,23 +37,50 @@ This repository provides:
 
 ## Status
 
-Under construction — first release pending. See
-[BUILDING.md](BUILDING.md) for the build pipeline and
-[INTERFACE.md](INTERFACE.md) for the driver API contract (stable before v0.1.0).
+Build spike complete and verified (2026-08-13): the full pipeline — pinned
+upstream 1.52.0 + emsdk 6.0.6 → native data build → wasm cross-compile →
+trimmed data pack → driver — runs green, and the wasm artifact synthesizes
+speech sample-identical to the native build. Remaining before the v0.1.0 tag:
+academic freeze of the Latin mapping table, CI workflow, and the full
+acceptance suite ([BUILDING.md](BUILDING.md) §Acceptance criteria).
 
-## Usage (preview)
+| File | Role |
+|---|---|
+| `build.sh` / `trim-data.sh` | The pipeline (single source of truth, local + CI) |
+| `glue.c` | Minimal C glue between libespeak-ng and JS |
+| `espeak-wasm-driver.js` | The driver — implements [INTERFACE.md](INTERFACE.md) |
+| `mapping/la.json` | Latin IPA→mnemonic table (**DRAFT**, pending academic review) |
+| `test/node-smoke.mjs` | Engine-level headless smoke test |
+| `test/driver-smoke.mjs` | Driver-level contract test (mapping, stress, rate, errors) |
+| `BUILDING.md` | Build instructions (as-built, incl. platform pitfalls) |
+| `INTERFACE.md` | Stability contract for consumers |
+
+## Usage
 
 ```js
-import { init, playIPA } from "./vendor/espeak-ng/espeak-wasm-driver.js";
+import { init, synthesize, playIPA } from "./vendor/espeak-ng/espeak-wasm-driver.js";
 
 await init({ wasmURL: "./vendor/espeak-ng/espeak-ng.wasm",
              dataURL: "./vendor/espeak-ng/espeak-ng.data" });
-await playIPA("ˈar.ma wɪr.ˈʊŋ.kʷe ˈka.noː");   // Latin: arma virumque cano
+
+// One-call convenience: synthesize + play (first call needs a user gesture)
+await playIPA("ˈar.ma wɪr.ˈʊŋ.kʷe ˈka.noː");   // arma virumque cano
+
+// Or get raw PCM (22050 Hz, 16-bit signed, mono):
+const { pcm, sampleRate, durationMs } = await synthesize("ˈka.noː", { rate: 120 });
 ```
 
 The driver accepts IPA and maps it internally to eSpeak NG phoneme mnemonics; the
 mapping table is versioned, explicit, and hard-fails on unmappable symbols (no silent
 approximation). Full contract: [INTERFACE.md](INTERFACE.md).
+
+## Verify
+
+```sh
+bash build.sh            # full pipeline (native + wasm + package), ~10 min
+node test/node-smoke.mjs    # engine-level: PCM non-silent, rate 22050
+node test/driver-smoke.mjs  # driver-level: mapping, stress, rate, error contract
+```
 
 ## License and attribution
 

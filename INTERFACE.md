@@ -42,11 +42,17 @@ options = {
   dataURL: string,        // URL of espeak-ng.data
   loaderURL?: string,     // URL of espeak-ng.js (default: alongside driver)
   mappingURL?: string,    // override IPA→mnemonic mapping table (default: bundled)
+  mapping?: object,       // inline parsed mapping table (alternative to
+                          // mappingURL — for tests, bundlers, non-fetch envs)
+  voice?: string,         // engine voice for phoneme realization (default "la";
+                          // the voice must exist in the data package)
 }
 ```
 
 - Idempotent; second call is a no-op. Must resolve before any other call.
-- Loads the engine inside a dedicated Web Worker.
+- v0.1.x loads the engine on the **main thread** (a verse synthesizes in
+  ~10–50 ms, imperceptible behind a user gesture). Web Worker isolation is
+  planned for v0.2 with **no API change**.
 
 ### `synthesize(ipa, options?) → Promise<SynthesisResult>`
 
@@ -82,6 +88,11 @@ options = {
 - Encoding: UTF-8, **NFC-normalized** by the driver before processing.
 - Suprasegmentals understood: `ˈ` primary stress, `ˌ` secondary stress, `.` syllable
   boundary. Stress is never inferred — unmarked input is synthesized unstressed.
+- Stress placement convention: IPA marks stress before the syllable ONSET;
+  espeak mnemonics want the mark before the stressed VOWEL. The driver holds
+  the mark pending and emits it onto the next vowel/diphthong mnemonic.
+- `.` syllable boundaries are accepted and dropped — the engine syllabifies
+  phoneme strings internally.
 - Whitespace separates words; everything else is treated as phoneme symbols.
 - **Hard-error semantics**: any symbol (or symbol sequence) with no entry in the
   mapping table rejects the call with `UnmappableSymbolError { symbol, position }`.
@@ -91,8 +102,10 @@ options = {
 ## 5. IPA → mnemonic mapping table
 
 - Single JSON file, versioned (`mappingVersion` in `manifest.json`; bump on any
-  change). Shape: ordered list of `{ ipa, mnemonic, note? }` rules, longest-match
-  first for multi-codepoint sequences (ties, affricates, gemination).
+  change). Shape: ordered list of `{ ipa, mnemonic, kind?, note? }` rules,
+  longest-match first for multi-codepoint sequences (ties, affricates,
+  gemination). `kind` is `"vowel" | "diphthong" | "consonant"` — the driver
+  needs it to attach pending stress marks to vowel mnemonics (§4).
 - Academic review gate: the table is signed off by a domain reviewer before each
   mapping version ships. Review target = phoneme-level sound↔symbol correspondence
   against upstream `phsource/phonemes` and the Latin phoneme definitions.
@@ -111,6 +124,9 @@ options = {
 ## 7. Deployment notes for callers
 
 - Serve `.wasm` with MIME type `application/wasm` (enables streaming compilation).
+- Node.js callers (tests, scripts): pass `wasmURL`/`dataURL` as plain
+  filesystem paths, not `file://` URLs — the Emscripten loader feeds them to
+  `readFileSync`. `loaderURL` accepts either. See `test/driver-smoke.mjs`.
 - Pre-cache all artifacts in the PWA Service Worker (versioned URLs) for offline use;
   total footprint ≤ 4 MB (pre-gzip) is a release acceptance criterion.
 - No `SharedArrayBuffer`, no cross-origin isolation requirement in v0.x (PCM crosses
