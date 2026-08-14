@@ -36,29 +36,38 @@
 3. **Functional acceptance coverage is thin** — current coverage is the two
    smoke tests; the ≥ 20 gold-standard IPA string suite (acceptance #2)
    is in preparation.
-4. **Known issues from a post-release audit (2026-08-14)** — under
-   maintainer review; fixes targeted for v0.1.1:
-   - The v0.1.0 Release layout (`la.json` at the asset root) does not match
-     the driver's default mapping path (`./mapping/la.json`), so default
-     vendoring per the README example fails at `init()` with a fetch error.
-     Workaround: pass `mappingURL` or an inline `mapping` explicitly.
-   - `init()` is not concurrency-safe and its lifecycle transition is not
-     atomic (concurrent or interrupted init can leave inconsistent state).
-   - `build.sh` does not enforce the pinned emsdk version — the manifest
-     `emsdk` field is informational only.
-   - `build.sh` does not guard against dirty or stale upstream checkouts
-     (commit hash match does not imply a clean tree or fresh native data).
-   - Absolute build paths are embedded in the generated loader, so
-     bit-for-bit reproducibility does not hold across checkout directories
-     (runtime relocation is unaffected).
-   - Contract-valid input (500 IPA characters at rate 80) can exceed the
-     fixed 60-second PCM buffer and fail with `SynthesisError`.
-   - `sha256sums.txt` / `manifest.json` cover only the three engine
-     artifacts, not the driver or the mapping table.
-   - The mapping contract marks `kind` optional, but the driver requires it
-     for stress placement — custom mappings that omit it silently lose
-     stress marks.
-   - `UnmappableSymbolError.position` miscounts after whitespace runs.
+4. **Post-release audit (2026-08-14) — adjudicated 2026-08-15.** An
+   independent audit of the v0.1.0 tag produced 17 findings; all 17 were
+   confirmed on review (none rejected). Disposition:
+   - **Fix batch for v0.1.1** (14 items):
+     - Driver: default mapping path aligned with the flat Release layout
+       (`./la.json`, with Node filesystem support) — the v0.1.0 default
+       (`./mapping/la.json`) fails at `init()` for README-style vendoring;
+       workaround until v0.1.1: pass `mappingURL` or an inline `mapping`.
+     - Driver: atomic `init()` lifecycle (single init promise, all-or-nothing
+       state commit, generation guard, cleanup on failure).
+     - Driver: `kind` becomes required in mapping rules with `init()`-time
+       enum validation (v0.1.0 marked it optional, but stress placement
+       depends on it — custom mappings omitting it silently lose stress).
+     - Driver: `UnmappableSymbolError.position` counts original codepoint
+       spans across whitespace.
+     - Glue: dynamic-growth PCM buffer with an explicit hard cap, replacing
+       the fixed 60-second buffer that contract-valid input (500 IPA
+       characters at rate 80) can exceed.
+     - Build: enforce the pinned emsdk version (fail-closed `emcc` version
+       check); guard against dirty/stale upstream trees (clean-tree check +
+       commit/flags cache stamp); relative output paths so loader builds are
+       bit-for-bit reproducible across checkout directories; checksums and
+       manifest cover the full runtime set (driver, mapping, LICENSE), with
+       `mappingVersion` read from the mapping JSON itself.
+     - Docs: residual wording fixes (INTERFACE main-thread/transferable
+       descriptions, README CI phrasing, BUILDING reproducibility-scope
+       statement) and the CI workflow itself.
+   - **Deferred to v0.2** (1 item): legacy-API reinitialization can report a
+     stale sample rate on a reused WASM module — unreachable via the stable
+     driver API; fixed alongside the v0.2 lifecycle/Worker rework.
+   - **Already closed** (2 items, docs sync commit `20813c7`): BUILDING
+     bootstrap-order overview; README submodule wording.
 
 ## Roadmap
 
