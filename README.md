@@ -29,9 +29,9 @@ This repository provides:
 
 1. A **pinned, reproducible build pipeline** (local + CI) from upstream release tags to
    `.wasm` + `.data` artifacts.
-2. A **minimal modern driver** (`espeak-wasm-driver.js`): Web Worker isolation, PCM
-   retrieval via the C API, playback through `AudioBufferSourceNode` — no deprecated
-   APIs.
+2. A **minimal modern driver** (`espeak-wasm-driver.js`): PCM retrieval via the C
+   API, playback through `AudioBufferSourceNode` — no deprecated APIs. v0.1.x runs
+   on the main thread; Web Worker isolation is planned for v0.2 with no API change.
 3. A **trimmed data package**: phoneme synthesis tables only, no per-language
    dictionaries (phoneme-input mode bypasses them), targeting ≤ 4 MB total.
 4. **Checksummed releases** (`sha256sums.txt`) so downstream projects can vendor
@@ -39,12 +39,14 @@ This repository provides:
 
 ## Status
 
-Build spike complete and verified (2026-08-13): the full pipeline — pinned
+**v0.1.0 released 2026-08-13** (Zenodo DOI above): the full pipeline — pinned
 upstream 1.52.0 + emsdk 6.0.6 → native data build → wasm cross-compile →
 trimmed data pack → driver — runs green, and the wasm artifact synthesizes
-speech sample-identical to the native build. Remaining before the v0.1.0 tag:
-academic freeze of the Latin mapping table, CI workflow, and the full
-acceptance suite ([BUILDING.md](BUILDING.md) §Acceptance criteria).
+speech sample-identical to the native build. Known gaps: the Latin mapping
+table is a draft pending academic freeze, there is no CI workflow yet
+(v0.1.0 was built and verified locally), and the full acceptance suite
+([BUILDING.md](BUILDING.md) §Acceptance criteria) is still being assembled.
+See [STATUS.md](STATUS.md) for the full gap list and known issues.
 
 | File | Role |
 |---|---|
@@ -87,8 +89,9 @@ node test/driver-smoke.mjs  # driver-level: mapping, stress, rate, error contrac
 ## License and attribution
 
 **GPLv3** — the build artifacts are derivative works of eSpeak NG. Corresponding
-source: the pinned upstream tag (submodule reference in this repo) plus the build
-scripts and glue code here.
+source: the pinned upstream tag/commit (recorded in `build.sh` and
+`manifest.json`, fetched from the official upstream repository by the build
+script) plus the build scripts and glue code here.
 
 This project stands on earlier emscripten ports by **Eitan Isaacson** (original eSpeak
 port, 2015) and **Alberto Pettarin** (eSpeak NG adaptation, 2016, merged upstream).

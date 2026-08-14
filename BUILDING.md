@@ -2,7 +2,7 @@
 
 > Reproducible build pipeline: upstream eSpeak NG release tag → `.wasm` + `.data` +
 > driver. Same script runs locally (macOS) and in CI (ubuntu-latest).
-> Status: v0.1.0-draft · 2026-08-13
+> Status: v0.1.x · updated 2026-08-15
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@
 Two-stage build — the data package can **only** be produced by a native build:
 
 ```
-stage 1 (native):  autoreconf → autogen → configure → make        → espeak-ng-data/
+stage 1 (native):  autogen → autoreconf → configure → make        → espeak-ng-data/
 stage 2 (wasm):    ucd-tools via emconfigure → libespeak-ng.la    → link with glue.c
                    via emcc → espeak-ng.{js,wasm} + trimmed .data
 ```
@@ -27,10 +27,9 @@ stage 2 (wasm):    ucd-tools via emconfigure → libespeak-ng.la    → link wit
 ## Steps
 
 1. **Clone & pin.** `git clone https://github.com/espeak-ng/espeak-ng`; check out the
-   pinned release tag (currently **1.52.0**); `git submodule update --init`
-   (ucd-tools is a submodule since ~1.50 — a plain clone leaves `src/ucd-tools/`
-   empty and the build fails later); record tag + commit SHA (they go into
-   `manifest.json`).
+   pinned release tag (currently **1.52.0**); record tag + commit SHA (they go into
+   `manifest.json`). (ucd-tools is vendored as a plain tracked tree in 1.52.0 —
+   no submodule step exists; see step 5.)
 2. **Fix autotools bootstrap:** `./autogen.sh && autoreconf -fvi` — in THIS order.
    autogen.sh creates `AUTHORS`/`NEWS`/`README` that automake requires (running
    autoreconf first aborts with "required file './AUTHORS' not found");
@@ -112,11 +111,12 @@ PCM: 22050 Hz / 16-bit signed / mono, whole-utterance buffered.
 - Long builds run via `nohup bash build.sh > build.log 2>&1 &` with manual log
   tailing — never as agent-runtime background tasks (process-tree reaping risk).
 - `build.sh` is the single source of truth: local spike and CI run the same script.
-- CI: GitHub Actions, ubuntu-latest, pinned emsdk; on success upload artifacts;
-  tag push → GitHub Release with `espeak-ng.wasm`, `espeak-ng.data`, `espeak-ng.js`,
+- CI (planned, not yet landed — v0.1.0 was built and released locally): GitHub
+  Actions, ubuntu-latest, pinned emsdk; on success upload artifacts; tag push →
+  GitHub Release with `espeak-ng.wasm`, `espeak-ng.data`, `espeak-ng.js`,
   `espeak-wasm-driver.js`, `manifest.json`, `sha256sums.txt`.
-- Reproducibility check: CI artifact SHA-256 must match a clean local build of the
-  same tag + toolchain.
+- Reproducibility check (takes effect once CI lands): CI artifact SHA-256 must
+  match a clean local build of the same tag + toolchain.
 
 ## Fallback path (if the spike stalls > 2 days)
 

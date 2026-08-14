@@ -1,6 +1,6 @@
 # Driver Interface Contract (INTERFACE.md)
 
-> Status: **v0.1.0-draft** — frozen at first release (v0.1.0). Changes after freeze
+> Status: **v0.1.0** — frozen at the v0.1.0 tag (2026-08-13). Changes after freeze
 > follow semver: breaking changes bump the major version.
 > Audience: any project embedding the artifacts (Porphyrii, dictionary tooling, future
 > Ancient Greek projects). This contract is the only integration surface; everything
