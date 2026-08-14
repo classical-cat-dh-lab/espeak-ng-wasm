@@ -44,7 +44,13 @@ else
 fi
 
 echo "[3/4] tracked file contents (all revisions, all refs)"
-hits=$(git grep -inIE "$PATTERN" $(git rev-list --all) -- . 2>/dev/null || true)
+# Exclude the enforcement tooling itself: .githooks/commit-msg and this
+# script must contain the forbidden patterns verbatim in order to detect
+# them; matching themselves is a false positive, not a leak. If either file
+# is ever renamed or copied, update this exclusion (or the new path will
+# fail the audit until reviewed).
+hits=$(git grep -inIE "$PATTERN" $(git rev-list --all) -- . \
+  ':(exclude).githooks/commit-msg' ':(exclude)scripts/audit-public-history.sh' 2>/dev/null || true)
 if [ -n "$hits" ]; then
   echo "$hits" | head -50
   echo "FAIL: forbidden string in tracked file contents"
