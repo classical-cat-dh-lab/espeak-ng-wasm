@@ -9,7 +9,8 @@
 #   all      native → wasm → package
 #
 # Environment:
-#   EMSDK_DIR   emsdk location (default: $HOME/developer/emsdk)
+#   EMSDK_DIR   emsdk location (default: $HOME/developer/emsdk); captured at
+#               entry as EMSDK_ROOT (emsdk_env.sh clears EMSDK_DIR when sourced)
 #   FORCE=1     rebuild the native tree even if the cache stamp matches
 #
 # Long builds: run via `nohup bash build.sh > build/logs/build.log 2>&1 &`
@@ -17,9 +18,14 @@
 set -euo pipefail
 
 # --- Pinned inputs (recorded into dist/manifest.json) -----------------------
+# NOTE: emsdk_env.sh unsets environment variables in its own namespace
+# (EMSDK_VERSION, EMSDK_DIR, ...) when sourced. Our pin is EMSDK_PIN and the
+# SDK path is captured into EMSDK_ROOT at entry, so neither can be cleared
+# out from under set -u (CI failure 2026-08-16: EMSDK_VERSION exported via
+# GitHub Actions $GITHUB_ENV was cleared by emsdk_env.sh).
 ESPEAK_TAG="1.52.0"
 ESPEAK_COMMIT="4870adfa25b1a32b4361592f1be8a40337c58d6c"
-EMSDK_VERSION="6.0.6"
+EMSDK_PIN="6.0.6"
 
 # --- Paths ------------------------------------------------------------------
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,7 +35,7 @@ TRIMMED="$ROOT/build/espeak-ng-data-trimmed"
 DIST="$ROOT/dist"
 SMOKE="$ROOT/build/smoke"
 STAMP="$ROOT/build/.native-cache.stamp"
-EMSDK_DIR="${EMSDK_DIR:-$HOME/developer/emsdk}"
+EMSDK_ROOT="${EMSDK_DIR:-$HOME/developer/emsdk}"
 
 # --disable-shared: we only ever consume the static libespeak-ng.a, and the
 # macOS 26 linker rejects libtool's -undefined dynamic_lookup for
@@ -46,17 +52,17 @@ log() { printf '\n=== build.sh: %s ===\n' "$*"; }
 # the SDK — mismatch is a maintainer action, reported with the fix command.
 EMCC_VERSION_LINE=""
 verify_emsdk() {
-    [ -x "$EMSDK_DIR/emsdk" ] || {
-        echo "emsdk not found at $EMSDK_DIR (set EMSDK_DIR)" >&2; exit 1; }
+    [ -x "$EMSDK_ROOT/emsdk" ] || {
+        echo "emsdk not found at $EMSDK_ROOT (set EMSDK_DIR)" >&2; exit 1; }
     # shellcheck disable=SC1091
-    source "$EMSDK_DIR/emsdk_env.sh" >/dev/null
+    source "$EMSDK_ROOT/emsdk_env.sh" >/dev/null
     EMCC_VERSION_LINE="$(emcc --version | head -1)"
     local ver
     ver="$(printf '%s\n' "$EMCC_VERSION_LINE" | sed -E 's/^emcc \([^)]*\) ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
-    if [ "$ver" != "$EMSDK_VERSION" ]; then
-        echo "emsdk pin violation: build.sh pins $EMSDK_VERSION but the active emcc reports:" >&2
+    if [ "$ver" != "$EMSDK_PIN" ]; then
+        echo "emsdk pin violation: build.sh pins $EMSDK_PIN but the active emcc reports:" >&2
         echo "  $EMCC_VERSION_LINE" >&2
-        echo "fix: (cd \"$EMSDK_DIR\" && ./emsdk install $EMSDK_VERSION && ./emsdk activate $EMSDK_VERSION)" >&2
+        echo "fix: (cd \"$EMSDK_ROOT\" && ./emsdk install $EMSDK_PIN && ./emsdk activate $EMSDK_PIN)" >&2
         exit 1
     fi
 }
@@ -206,7 +212,7 @@ stage_package() {
     "tag": "$ESPEAK_TAG",
     "commit": "$ESPEAK_COMMIT"
   },
-  "emsdk": "$EMSDK_VERSION",
+  "emsdk": "$EMSDK_PIN",
   "emscripten": "$EMCC_VERSION_LINE",
   "mappingVersion": "$mapping_version",
   "toolchain": {

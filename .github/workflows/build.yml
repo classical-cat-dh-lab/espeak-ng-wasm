@@ -23,19 +23,19 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y autoconf automake libtool
 
       - name: Resolve pinned emsdk version from build.sh
-        run: echo "EMSDK_VERSION=$(sed -n 's/^EMSDK_VERSION="\(.*\)"/\1/p' build.sh)" >> "$GITHUB_ENV"
+        run: echo "EMSDK_PIN=$(sed -n 's/^EMSDK_PIN="\(.*\)"/\1/p' build.sh)" >> "$GITHUB_ENV"
 
       - name: Cache emsdk
         uses: actions/cache@v4
         with:
           path: emsdk
-          key: emsdk-${{ runner.os }}-${{ env.EMSDK_VERSION }}
+          key: emsdk-${{ runner.os }}-${{ env.EMSDK_PIN }}
 
       - name: Set up emsdk (pinned)
         run: |
           [ -d emsdk ] || git clone --depth 1 https://github.com/emscripten-core/emsdk emsdk
-          ./emsdk/emsdk install "$EMSDK_VERSION"
-          ./emsdk/emsdk activate "$EMSDK_VERSION"
+          ./emsdk/emsdk install "$EMSDK_PIN"
+          ./emsdk/emsdk activate "$EMSDK_PIN"
 
       - name: Build (native + wasm + package)
         env:
@@ -79,20 +79,20 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y autoconf automake libtool
 
       - name: Resolve pinned emsdk version from build.sh
-        run: echo "EMSDK_VERSION=$(sed -n 's/^EMSDK_VERSION="\(.*\)"/\1/p' build.sh)" >> "$GITHUB_ENV"
+        run: echo "EMSDK_PIN=$(sed -n 's/^EMSDK_PIN="\(.*\)"/\1/p' build.sh)" >> "$GITHUB_ENV"
 
       - name: Cache emsdk (reproducibility leg)
         uses: actions/cache@v4
         with:
           path: emsdk-repro
-          key: emsdk-${{ runner.os }}-${{ env.EMSDK_VERSION }}
+          key: emsdk-${{ runner.os }}-${{ env.EMSDK_PIN }}
 
       - name: Set up emsdk (pinned, different absolute path)
         working-directory: ${{ github.workspace }}
         run: |
           [ -d emsdk-repro ] || git clone --depth 1 https://github.com/emscripten-core/emsdk emsdk-repro
-          ./emsdk-repro/emsdk install "$EMSDK_VERSION"
-          ./emsdk-repro/emsdk activate "$EMSDK_VERSION"
+          ./emsdk-repro/emsdk install "$EMSDK_PIN"
+          ./emsdk-repro/emsdk activate "$EMSDK_PIN"
 
       - name: Build (native + wasm + package)
         env:
