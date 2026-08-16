@@ -11,7 +11,7 @@
   - git, bash
 - Emscripten SDK: clone https://github.com/emscripten-core/emsdk, `emsdk install
   <pinned-version> && emsdk activate <pinned-version>` (~2–3 GB disk).
-  The pinned version is a constant in `build.sh` (`EMSDK_PIN`) and is
+  The pinned version is a constant in `build.sh` (`PINNED_EMSDK`) and is
   **enforced fail-closed**: after sourcing `emsdk_env.sh`, the script compares
   `emcc --version` against the pin and aborts on mismatch (it never
   auto-installs — mismatch is a maintainer action). The measured version is
