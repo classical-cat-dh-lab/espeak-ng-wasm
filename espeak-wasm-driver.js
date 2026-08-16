@@ -1,7 +1,7 @@
 /*
  * espeak-wasm-driver.js — IPA → speech driver for the espeak-ng-wasm artifacts.
  *
- * Implements the contract in INTERFACE.md §3 (v0.1.0). Language-agnostic: no
+ * Implements the contract in INTERFACE.md §3 (v0.1.1). Language-agnostic: no
  * orthography-to-phoneme conversion, no dictionary lookup. Callers own the
  * phonology (IPA in); the driver owns the acoustics (PCM out).
  *
@@ -18,6 +18,9 @@
 const DEFAULTS = { rate: 175, pitch: 50 };   // INTERFACE.md §3
 const MAX_INPUT_CHARS = 500;                 // INTERFACE.md §3
 const SAMPLE_RATE = 22050;                   // INTERFACE.md §3 (constant in v0.x)
+
+const IS_NODE = typeof process !== 'undefined'
+    && !!process.versions && !!process.versions.node;
 
 /* ---------------------------------------------------------------- errors */
 
@@ -39,17 +42,77 @@ export class DriverStateError extends Error {
     constructor(message) { super(message); this.name = 'DriverStateError'; }
 }
 
-/* ----------------------------------------------------------------- state */
+/* ----------------------------------------------------------------- state
+ *
+ * Lifecycle (H-02): init() is a single-flight operation. Concurrent callers
+ * share one in-flight promise; mapping rules, module instance, and state are
+ * staged in locals and committed atomically only after every step succeeds.
+ * terminate() bumps _generation, which invalidates a late-finishing init so
+ * it can never commit over a terminated lifecycle; a failed init tears down
+ * its half-built module before rejecting.
+ */
+let _M = null;          // Emscripten module instance
+let _rules = null;      // mapping rules, pre-sorted longest-first
+let _state = 'new';     // new | ready | terminated
+let _initPromise = null; // in-flight init, shared by concurrent callers
+let _generation = 0;    // lifecycle token; bumped by terminate()
+let _audioCtx = null;   // shared AudioContext (created on first playIPA)
 
-let _M = null;        // Emscripten module instance
-let _rules = null;    // mapping rules, pre-sorted longest-first
-let _state = 'new';   // new | ready | terminated
-let _audioCtx = null; // shared AudioContext (created on first playIPA)
+/* ---------------------------------------------------- mapping table load
+ *
+ * Default: ./la.json alongside this driver — the flat GitHub Release layout
+ * (Release assets cannot preserve directories, so the v0.1.0 default of
+ * ./mapping/la.json failed for README-style vendoring; H-01).
+ * Node.js: read via fs (undici fetch has no file: support); mappingURL then
+ * accepts a plain filesystem path, a file: URL, or an http(s) URL — the same
+ * convention as wasmURL/dataURL (INTERFACE.md §7).
+ */
+async function loadMapping(options) {
+    if (options.mapping) return options.mapping;
+    const src = options.mappingURL ?? new URL('./la.json', import.meta.url);
+    const isHttp = typeof src === 'string' && /^https?:\/\//.test(src);
+    if (IS_NODE && !isHttp) {
+        const { readFileSync } = await import(/* webpackIgnore: true */ 'node:fs');
+        // readFileSync accepts plain paths and file: URLs (and URL objects).
+        return JSON.parse(readFileSync(src, 'utf8'));
+    }
+    const res = await fetch(src);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${src}`);
+    return res.json();
+}
+
+/* kind is REQUIRED (M-07): stress repositioning attaches pending stress marks
+ * to vowel/diphthong mnemonics; a rule without a valid kind would silently
+ * drop stress. Violations are InitError, per the hard-error design. */
+const KINDS = new Set(['vowel', 'diphthong', 'consonant']);
+
+function compileRules(mapping) {
+    if (!mapping || !Array.isArray(mapping.rules)) {
+        throw new InitError('mapping table must contain a "rules" array');
+    }
+    const rules = mapping.rules.map((r, idx) => {
+        if (!r || typeof r.ipa !== 'string' || typeof r.mnemonic !== 'string') {
+            throw new InitError(`mapping rule #${idx}: "ipa" and "mnemonic" strings are required`);
+        }
+        if (!KINDS.has(r.kind)) {
+            throw new InitError(`mapping rule #${idx} (${JSON.stringify(r.ipa)}): `
+                + '"kind" must be one of "vowel" | "diphthong" | "consonant"');
+        }
+        const cps = [...r.ipa]; // codepoints
+        return { ipa: r.ipa, mnemonic: r.mnemonic, kind: r.kind, _cps: cps, _len: cps.length };
+    });
+    rules.sort((a, b) => b._len - a._len); // longest-match first
+    return rules;
+}
 
 /* --------------------------------------------------------- IPA → mnemonic
  *
- * Longest-match over the rule list. Suprasegmentals are structural, handled
- * here rather than via the table:
+ * Longest-match over the rule list, scanned codepoint-by-codepoint over the
+ * whole NFC input (L-01: UnmappableSymbolError.position is the codepoint
+ * index in the NFC'd input, whitespace spans included — an astral codepoint
+ * counts as one position, not two UTF-16 units).
+ *
+ * Suprasegmentals are structural, handled here rather than via the table:
  *   ˈ / ˌ  stress — espeak wants the mark BEFORE THE VOWEL of the stressed
  *          syllable (k'ano), IPA places it before the syllable ONSET
  *          ('ka.no:). We hold it pending and emit it just before the next
@@ -58,41 +121,41 @@ let _audioCtx = null; // shared AudioContext (created on first playIPA)
  *          itself (accepted but unused in [[...]] input).
  */
 function mapToMnemonics(text) {
-    const words = text.split(/\s+/).filter(Boolean);
+    const chars = [...text]; // codepoints
     const out = [];
-    let charPos = 0; // codepoint offset in the NFC'd input, for error reporting
-    for (const word of words) {
-        const chars = [...word];
-        let i = 0;
-        let pendingStress = null;
-        while (i < chars.length) {
-            const ch = chars[i];
-            if (ch === 'ˈ') { pendingStress = "'"; i++; charPos++; continue; }
-            if (ch === 'ˌ') { pendingStress = ','; i++; charPos++; continue; }
-            if (ch === '.') { i++; charPos++; continue; }
-            let hit = null;
-            for (const r of _rules) {           // pre-sorted longest-first
-                if (r._len <= (hit ? hit._len : 0)) continue;
-                let ok = true;
-                for (let k = 0; k < r._cps.length; k++) {
-                    if (chars[i + k] !== r._cps[k]) { ok = false; break; }
-                }
-                if (ok) hit = r;
-            }
-            if (!hit) throw new UnmappableSymbolError(ch, charPos);
-            if (pendingStress && (hit.kind === 'vowel' || hit.kind === 'diphthong')) {
-                out.push(pendingStress);
-                pendingStress = null;
-            }
-            out.push(hit.mnemonic);
-            i += hit._len;
-            charPos += hit._len;
+    let i = 0;
+    let pendingStress = null;
+    let inWord = false;
+    while (i < chars.length) {
+        const ch = chars[i];
+        if (/\s/u.test(ch)) { // whitespace separates words (span preserved in i)
+            if (inWord) { out.push(' '); inWord = false; }
+            i++;
+            continue;
         }
-        // A trailing pending stress (invalid IPA) is dropped silently; valid
-        // input always has a vowel after the stress mark.
-        out.push(' ');
-        charPos += 1; // the whitespace consumed by split
+        inWord = true;
+        if (ch === 'ˈ') { pendingStress = "'"; i++; continue; }
+        if (ch === 'ˌ') { pendingStress = ','; i++; continue; }
+        if (ch === '.') { i++; continue; }
+        let hit = null;
+        for (const r of _rules) {           // pre-sorted longest-first
+            if (i + r._len > chars.length) continue;
+            let ok = true;
+            for (let k = 0; k < r._cps.length; k++) {
+                if (chars[i + k] !== r._cps[k]) { ok = false; break; }
+            }
+            if (ok) { hit = r; break; }
+        }
+        if (!hit) throw new UnmappableSymbolError(ch, i);
+        if (pendingStress && (hit.kind === 'vowel' || hit.kind === 'diphthong')) {
+            out.push(pendingStress);
+            pendingStress = null;
+        }
+        out.push(hit.mnemonic);
+        i += hit._len;
     }
+    // A trailing pending stress (invalid IPA) is dropped silently; valid
+    // input always has a vowel after the stress mark.
     return out.join('').trim();
 }
 
@@ -100,39 +163,37 @@ function mapToMnemonics(text) {
 
 /**
  * init(options) → Promise<void>   (INTERFACE.md §3)
- * Idempotent. options:
- *   wasmURL, dataURL   required — artifact URLs
+ * Idempotent and single-flight: concurrent calls share one promise; a second
+ * call after success is a no-op. options:
+ *   wasmURL, dataURL   required — artifact URLs (Node: plain filesystem paths)
  *   loaderURL          default: espeak-ng.js alongside this driver
- *   mappingURL         default: mapping/la.json alongside this driver (fetch)
+ *   mappingURL         default: la.json alongside this driver (flat Release
+ *                      layout; Node reads it via fs, browsers via fetch)
  *   mapping            inline parsed mapping object (alternative to mappingURL
  *                      — for tests, bundlers, non-fetch environments)
  *   voice              default "la" — engine voice for phoneme realization
  */
 export async function init(options) {
     if (_state === 'ready') return;
+    if (_initPromise) return _initPromise; // H-02: concurrent init shares the flight
+    _initPromise = doInit(options).finally(() => { _initPromise = null; });
+    return _initPromise;
+}
+
+async function doInit(options) {
     if (!options || !options.wasmURL || !options.dataURL) {
         throw new InitError('init: wasmURL and dataURL are required');
     }
+    const gen = _generation;
+    let M = null; // staged locally; committed to _M only on full success
     try {
-        let mapping = options.mapping;
-        if (!mapping) {
-            const url = options.mappingURL
-                ?? new URL('./mapping/la.json', import.meta.url);
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-            mapping = await res.json();
-        }
-        _rules = [...mapping.rules];
-        for (const r of _rules) {
-            r._cps = [...r.ipa];        // codepoints
-            r._len = r._cps.length;
-        }
-        _rules.sort((a, b) => b._len - a._len); // longest-match first
+        const mapping = await loadMapping(options);
+        const rules = compileRules(mapping); // InitError on a malformed table
 
         const loaderURL = options.loaderURL
             ?? new URL('./espeak-ng.js', import.meta.url);
         const { default: createModule } = await import(/* webpackIgnore: true */ loaderURL);
-        _M = await createModule({
+        M = await createModule({
             locateFile: (file) =>
                 file.endsWith('.wasm') ? options.wasmURL :
                 file.endsWith('.data') ? options.dataURL : file,
@@ -144,17 +205,28 @@ export async function init(options) {
                 if (!/Can't read dictionary file/.test(m)) console.error(m);
             },
         });
-        const sr = _M.ccall('espeakng_init', 'number', ['string'], ['/']);
+        const sr = M.ccall('espeakng_init', 'number', ['string'], ['/']);
         if (sr !== SAMPLE_RATE) {
             throw new Error(`engine init returned sample rate ${sr}, expected ${SAMPLE_RATE}`);
         }
         const voice = options.voice ?? 'la';
-        if (_M.ccall('espeakng_set_voice', 'number', ['string'], [voice]) !== 0) {
+        if (M.ccall('espeakng_set_voice', 'number', ['string'], [voice]) !== 0) {
             throw new Error(`voice "${voice}" not present in data package`);
         }
+        // Generation guard: terminate() ran while this init was in flight —
+        // refuse to commit state over the terminated lifecycle. The staged
+        // module is torn down in the catch below.
+        if (gen !== _generation) {
+            throw new Error('init superseded by terminate()');
+        }
+        // Atomic commit: all-or-nothing.
+        _M = M;
+        _rules = rules;
         _state = 'ready';
     } catch (e) {
-        _state = 'new';
+        if (M) {
+            try { M.ccall('espeakng_terminate', null, [], []); } catch { /* best effort */ }
+        }
         throw e instanceof InitError ? e : new InitError(`init failed: ${e.message ?? e}`);
     }
 }
@@ -177,8 +249,9 @@ export async function synthesize(ipa, options = {}) {
     _M.ccall('espeakng_set_rate', 'number', ['number'], [options.rate ?? DEFAULTS.rate]);
     _M.ccall('espeakng_set_pitch', 'number', ['number'], [options.pitch ?? DEFAULTS.pitch]);
     const n = _M.ccall('espeakng_synthesize', 'number', ['string'], [mnemonics]);
+    if (n === -3) throw new SynthesisError('PCM buffer allocation failed');
     if (n === -2) throw new SynthesisError(`engine rejected: ${mnemonics}`);
-    if (n === -1) throw new SynthesisError('PCM buffer overflow (utterance too long)');
+    if (n === -1) throw new SynthesisError('PCM buffer overflow (utterance exceeds hard cap)');
     if (n <= 0) throw new SynthesisError(`engine returned ${n} samples`);
     const ptr = _M.ccall('espeakng_pcm', 'number', [], []);
     const pcm = _M.HEAP16.slice(ptr >> 1, (ptr >> 1) + n);
@@ -209,6 +282,7 @@ export async function playIPA(ipa, options = {}) {
 
 /** terminate() — frees engine resources; the driver is re-initializable. */
 export function terminate() {
+    _generation++; // H-02: invalidate any in-flight init
     if (_state === 'ready') _M.ccall('espeakng_terminate', null, [], []);
     _M = null;
     _rules = null;
