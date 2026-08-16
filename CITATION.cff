@@ -10,7 +10,7 @@ authors:
   - name: "Classical Cat Digital Humanities Lab"
     website: "https://github.com/classical-cat-dh-lab"
 repository-code: "https://github.com/classical-cat-dh-lab/espeak-ng-wasm"
-doi: 10.5281/zenodo.21917624
+doi: 10.5281/zenodo.21917623
 license: GPL-3.0-or-later
 keywords:
   - text-to-speech

@@ -1,6 +1,6 @@
 # espeak-ng-wasm
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21917624.svg)](https://doi.org/10.5281/zenodo.21917624)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21917623.svg)](https://doi.org/10.5281/zenodo.21917623)
 
 Reproducible WebAssembly builds of [eSpeak NG](https://github.com/espeak-ng/espeak-ng)
 for browser and PWA text-to-speech, with a minimal driver focused on **direct phoneme
