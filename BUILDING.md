@@ -2,7 +2,7 @@
 
 > Reproducible build pipeline: upstream eSpeak NG release tag → `.wasm` + `.data` +
 > driver. Same script runs locally (macOS) and in CI (ubuntu-latest).
-> Status: v0.1.x · updated 2026-08-15
+> Status: v0.1.x · updated 2026-08-16
 
 ## Prerequisites
 
@@ -11,7 +11,11 @@
   - git, bash
 - Emscripten SDK: clone https://github.com/emscripten-core/emsdk, `emsdk install
   <pinned-version> && emsdk activate <pinned-version>` (~2–3 GB disk).
-  The pinned version is recorded in `manifest.json` after each successful build.
+  The pinned version is a constant in `build.sh` (`EMSDK_VERSION`) and is
+  **enforced fail-closed**: after sourcing `emsdk_env.sh`, the script compares
+  `emcc --version` against the pin and aborts on mismatch (it never
+  auto-installs — mismatch is a maintainer action). The measured version is
+  recorded in `manifest.json` after each build.
 - Disk: ~4 GB total (emsdk + two build trees).
 
 ## Pipeline overview
@@ -23,6 +27,19 @@ stage 1 (native):  autogen → autoreconf → configure → make        → espe
 stage 2 (wasm):    ucd-tools via emconfigure → libespeak-ng.la    → link with glue.c
                    via emcc → espeak-ng.{js,wasm} + trimmed .data
 ```
+
+Guards (all fail-closed, in `build.sh`):
+
+- **Pin check**: after checkout, `rev-parse HEAD` must equal the pinned commit.
+- **Clean-tree check**: `git status --porcelain` on the upstream tree must be
+  empty — local edits or stale checkouts would silently poison data
+  provenance. The script reports the dirty files and stops; it never runs
+  `git clean` on a tree the maintainer may be reusing.
+- **Native cache stamp**: the native stage is skipped only when a stamp file
+  (`build/.native-cache.stamp`) matches the current (pinned commit +
+  configure flags + measured native toolchain) triple AND the built
+  artifacts exist. Any drift rebuilds from bootstrap.
+- **emsdk pin check**: see Prerequisites.
 
 ## Steps
 
@@ -62,9 +79,13 @@ stage 2 (wasm):    ucd-tools via emconfigure → libespeak-ng.la    → link wit
    host objects from step 3 must not leak into the wasm link):
    `emconfigure ./configure --prefix=/usr --without-async --without-mbrola
    --without-sonic --disable-shared && emmake make src/libespeak-ng.la`
-7. **Link wasm** with our own `glue.c` (not the upstream 2017 glue):
+7. **Link wasm** with our own `glue.c` (not the upstream 2017 glue), from
+   **inside `dist/` with a relative `-o` path** — an absolute output path is
+   embedded in the generated loader and breaks bit-for-bit reproducibility
+   across checkout directories:
    ```
    emcc -O3 -c glue.c -o glue.o          # C mode keeps exports unmangled
+   cd dist/
    em++ -O3 -sWASM=1 -sMODULARIZE=1 -sEXPORT_ES6=1 -sALLOW_MEMORY_GROWTH=1 \
         -sENVIRONMENT=web,node \
         --preload-file espeak-ng-data-trimmed@/espeak-ng-data \
@@ -77,6 +98,14 @@ stage 2 (wasm):    ucd-tools via emconfigure → libespeak-ng.la    → link wit
    sees C++ inputs. glue.c stays C so its exports keep C linkage.)
 8. **Trim data** via `trim-data.sh` (scripted, never manual — see below), then
    repackage `.data`.
+9. **Package** (`build.sh package`): copy the **full runtime set** into
+   `dist/` — engine triple + `espeak-wasm-driver.js` + `mapping/la.json`
+   (flat as `dist/la.json`, the path the driver resolves by default) +
+   `LICENSE` — then write `sha256sums.txt` and `manifest.json` over all six
+   files. `mappingVersion` is read from the mapping JSON itself, never
+   hardcoded. The manifest also records the measured native toolchain
+   (cc/autoconf/automake/make) — no fixed build container yet; see
+   §Operational discipline for the reproducibility scope.
 
 ## Data trimming (`trim-data.sh`)
 
@@ -88,7 +117,7 @@ Layout note (1.52): language voices moved from `voices/<code>` to
 `voices/default` file, and the la voice references no `!v` variants.
 Target: ≤ 2 MB trimmed; release acceptance = `.wasm` + `.data` ≤ 4 MB pre-gzip.
 
-## Glue layer (`glue.c`, ~100 lines)
+## Glue layer (`glue.c`, ~120 lines)
 
 Exported functions: `espeakng_init` (espeak_Initialize with
 `AUDIO_OUTPUT_SYNCHRONOUS` + synth callback), `espeakng_set_voice`,
@@ -104,19 +133,40 @@ PHONEMES flag (0x100) is what makes the engine interpret `[[...]]` as
 phoneme mnemonics. The CLI enables it in its default synth_flags; the
 library does NOT, and without it `[[...]]` falls into the text/dictionary
 path (silent with our dict-less trimmed data).
-PCM: 22050 Hz / 16-bit signed / mono, whole-utterance buffered.
+PCM: 22050 Hz / 16-bit signed / mono, whole-utterance buffered. The buffer
+starts at 60 s of audio and grows on demand (realloc, doubling) up to a hard
+cap of 300 s (~13 MB — the fixed 60 s ceiling it replaces was reachable by
+contract-valid input: 500 IPA characters at rate 80 synthesize to ~80 s).
+`espeakng_synthesize` returns `-1` on hard-cap overflow, `-2` on engine
+error, `-3` on allocation failure; `ALLOW_MEMORY_GROWTH=1` is set at link
+time.
 
 ## Operational discipline
 
-- Long builds run via `nohup bash build.sh > build.log 2>&1 &` with manual log
-  tailing — never as agent-runtime background tasks (process-tree reaping risk).
+- Long builds run via `nohup bash build.sh > build/logs/build.log 2>&1 &` with
+  manual log tailing — never as agent-runtime background tasks (process-tree
+  reaping risk).
 - `build.sh` is the single source of truth: local spike and CI run the same script.
-- CI (planned, not yet landed — v0.1.0 was built and released locally): GitHub
-  Actions, ubuntu-latest, pinned emsdk; on success upload artifacts; tag push →
-  GitHub Release with `espeak-ng.wasm`, `espeak-ng.data`, `espeak-ng.js`,
-  `espeak-wasm-driver.js`, `manifest.json`, `sha256sums.txt`.
-- Reproducibility check (takes effect once CI lands): CI artifact SHA-256 must
-  match a clean local build of the same tag + toolchain.
+- **CI** (`.github/workflows/build.yml`, landed with v0.1.1), four jobs:
+  1. `build` — ubuntu-latest, pinned emsdk (resolved from `build.sh`, cached),
+     full `bash build.sh`, all four test suites (`node-smoke`, `driver-smoke`,
+     `release-layout-smoke`, `acceptance`), a grep asserting no absolute
+     checkout path leaked into the loader, and `dist/` uploaded as an artifact.
+  2. `reproducibility` — the same build in a **different absolute checkout
+     path** (and a different emsdk path), uploading its own `dist/`.
+  3. `compare` — the two `sha256sums.txt` files must be byte-identical, and
+     each must verify against its own files.
+  4. `release` — on `v*` tags only: verifies checksums, then publishes the
+     GitHub Release with the **full `dist/` set** (engine triple, driver,
+     `la.json`, `LICENSE`, `manifest.json`, `sha256sums.txt`). No manual
+     asset uploads — the Release is assembled from the CI-verified set.
+- Reproducibility scope (evidence-based, updated 2026-08-16): bit-for-bit
+  reproducibility across checkout directories on the same platform is enforced
+  by CI (jobs 2–3). Cross-platform equivalence (CI ubuntu vs local macOS) is
+  compared at release time against the local build's checksums; the measured
+  native toolchain is recorded in `manifest.json` so any divergence is
+  diagnosable. No fixed build container is pinned yet — if a cross-platform
+  mismatch ever shows up, that is the fallback.
 
 ## Fallback path (if the spike stalls > 2 days)
 
@@ -127,9 +177,13 @@ codebase), same acceptance criteria.
 
 ## Acceptance criteria
 
-1. Clean-machine reproducibility (CI green, checksums match local).
+1. Clean-machine reproducibility: CI green, and checksums byte-identical
+   across two different checkout directories (CI jobs 2–3); CI vs local
+   checksums compared at release time.
 2. Functional: ≥ 20 gold-standard IPA strings synthesize without error, PCM
-   non-silent (RMS above threshold, checked programmatically), plausible durations.
+   non-silent (RMS above threshold, checked programmatically), plausible
+   durations — `test/acceptance.mjs`, 22 cases (Aeneid I.1–7 gold standard +
+   mapping-coverage derived cases).
 3. Human spot-check: 5–10 items (incl. Aeneid I.1–7) reviewed by ear for phoneme
    identity and stress placement. (Robotic timbre is inherent to formant synthesis —
    not an acceptance item.)

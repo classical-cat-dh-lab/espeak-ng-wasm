@@ -39,27 +39,34 @@ This repository provides:
 
 ## Status
 
-**v0.1.0 released 2026-08-13** (Zenodo DOI above): the full pipeline — pinned
+**v0.1.1 released 2026-08-16** (Zenodo DOI above): the full pipeline — pinned
 upstream 1.52.0 + emsdk 6.0.6 → native data build → wasm cross-compile →
-trimmed data pack → driver — runs green, and the wasm artifact synthesizes
-speech sample-identical to the native build. Known gaps: the Latin mapping
-table is a draft pending academic freeze, there is no CI workflow yet
-(v0.1.0 was built and verified locally), and the full acceptance suite
-([BUILDING.md](BUILDING.md) §Acceptance criteria) is still being assembled.
-See [STATUS.md](STATUS.md) for the full gap list and known issues.
+trimmed data pack → driver — runs green locally and in CI, and the wasm
+artifact synthesizes speech sample-identical to the native build. The Latin
+mapping table is reviewed and frozen (`mapping/la.json`, version 0.1.0).
+v0.1.1 ships the post-release audit fix batch: hardened driver init
+lifecycle, dynamic PCM buffering, enforced toolchain pins, CI with
+cross-directory checksum comparison, and a 22-case functional acceptance
+suite. See [STATUS.md](STATUS.md) for details and remaining gaps.
 
 | File | Role |
 |---|---|
 | `build.sh` / `trim-data.sh` | The pipeline (single source of truth, local + CI) |
 | `glue.c` | Minimal C glue between libespeak-ng and JS |
 | `espeak-wasm-driver.js` | The driver — implements [INTERFACE.md](INTERFACE.md) |
-| `mapping/la.json` | Latin IPA→mnemonic table (**DRAFT**, pending academic review) |
+| `mapping/la.json` | Latin IPA→mnemonic table (reviewed, frozen at 0.1.0) |
 | `test/node-smoke.mjs` | Engine-level headless smoke test |
-| `test/driver-smoke.mjs` | Driver-level contract test (mapping, stress, rate, errors) |
+| `test/driver-smoke.mjs` | Driver-level contract test (mapping, stress, rate, errors, init lifecycle) |
+| `test/release-layout-smoke.mjs` | Packaged-driver test against the flat Release layout |
+| `test/acceptance.mjs` | Functional acceptance suite (≥ 20 IPA cases, gold + derived) |
+| `.github/workflows/build.yml` | CI: clean build ×2 directories, tests, checksum comparison, tag → Release |
 | `BUILDING.md` | Build instructions (as-built, incl. platform pitfalls) |
 | `INTERFACE.md` | Stability contract for consumers |
 
 ## Usage
+
+Vendor the flat Release set (all files side by side — `la.json` next to the
+driver is the default mapping location) plus `LICENSE`:
 
 ```js
 import { init, synthesize, playIPA } from "./vendor/espeak-ng/espeak-wasm-driver.js";
@@ -81,9 +88,11 @@ approximation). Full contract: [INTERFACE.md](INTERFACE.md).
 ## Verify
 
 ```sh
-bash build.sh            # full pipeline (native + wasm + package), ~10 min
-node test/node-smoke.mjs    # engine-level: PCM non-silent, rate 22050
-node test/driver-smoke.mjs  # driver-level: mapping, stress, rate, error contract
+bash build.sh                      # full pipeline (native + wasm + package), ~10 min
+node test/node-smoke.mjs           # engine-level: PCM non-silent, rate 22050
+node test/driver-smoke.mjs         # driver-level: mapping, stress, rate, error contract
+node test/release-layout-smoke.mjs # packaged driver against the flat Release layout
+node test/acceptance.mjs           # 22-case functional acceptance (gold + derived)
 ```
 
 ## License and attribution

@@ -1,0 +1,149 @@
+# build.yml — clean build + smoke tests + functional acceptance + checksum
+# comparison across two different checkout directories (BUILDING.md,
+# acceptance criterion 1). On version tags, publishes the GitHub Release
+# from the verified dist/ set.
+#
+# Both build legs run the SAME build.sh (single source of truth, local + CI)
+# with the emsdk pin resolved FROM build.sh — no version is duplicated here.
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install autotools
+        run: sudo apt-get update && sudo apt-get install -y autoconf automake libtool
+
+      - name: Resolve pinned emsdk version from build.sh
+        run: echo "EMSDK_VERSION=$(sed -n 's/^EMSDK_VERSION="\(.*\)"/\1/p' build.sh)" >> "$GITHUB_ENV"
+
+      - name: Cache emsdk
+        uses: actions/cache@v4
+        with:
+          path: emsdk
+          key: emsdk-${{ runner.os }}-${{ env.EMSDK_VERSION }}
+
+      - name: Set up emsdk (pinned)
+        run: |
+          [ -d emsdk ] || git clone --depth 1 https://github.com/emscripten-core/emsdk emsdk
+          ./emsdk/emsdk install "$EMSDK_VERSION"
+          ./emsdk/emsdk activate "$EMSDK_VERSION"
+
+      - name: Build (native + wasm + package)
+        env:
+          EMSDK_DIR: ${{ github.workspace }}/emsdk
+        run: bash build.sh
+
+      - name: Smoke tests
+        run: |
+          node test/node-smoke.mjs
+          node test/driver-smoke.mjs
+          node test/release-layout-smoke.mjs
+
+      - name: Functional acceptance suite
+        run: node test/acceptance.mjs
+
+      - name: Loader contains no absolute checkout path
+        run: |
+          if grep -F "$PWD" dist/espeak-ng.js; then
+            echo "absolute checkout path embedded in dist/espeak-ng.js" >&2
+            exit 1
+          fi
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 30
+
+  reproducibility:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: checkout-dir
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: checkout-dir   # deliberately different absolute path
+
+      - name: Install autotools
+        run: sudo apt-get update && sudo apt-get install -y autoconf automake libtool
+
+      - name: Resolve pinned emsdk version from build.sh
+        run: echo "EMSDK_VERSION=$(sed -n 's/^EMSDK_VERSION="\(.*\)"/\1/p' build.sh)" >> "$GITHUB_ENV"
+
+      - name: Cache emsdk (reproducibility leg)
+        uses: actions/cache@v4
+        with:
+          path: emsdk-repro
+          key: emsdk-${{ runner.os }}-${{ env.EMSDK_VERSION }}
+
+      - name: Set up emsdk (pinned, different absolute path)
+        working-directory: ${{ github.workspace }}
+        run: |
+          [ -d emsdk-repro ] || git clone --depth 1 https://github.com/emscripten-core/emsdk emsdk-repro
+          ./emsdk-repro/emsdk install "$EMSDK_VERSION"
+          ./emsdk-repro/emsdk activate "$EMSDK_VERSION"
+
+      - name: Build (native + wasm + package)
+        env:
+          EMSDK_DIR: ${{ github.workspace }}/emsdk-repro
+        run: bash build.sh
+
+      - name: Smoke tests
+        run: |
+          node test/node-smoke.mjs
+          node test/driver-smoke.mjs
+          node test/release-layout-smoke.mjs
+
+      - name: Upload dist (reproducibility leg)
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-repro
+          path: checkout-dir/dist/
+          retention-days: 30
+
+  compare:
+    needs: [build, reproducibility]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist-a
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-repro
+          path: dist-b
+      - name: Checksums identical across checkout directories
+        run: |
+          diff dist-a/sha256sums.txt dist-b/sha256sums.txt
+          (cd dist-a && shasum -a 256 -c sha256sums.txt)
+          (cd dist-b && shasum -a 256 -c sha256sums.txt)
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: compare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Verify checksums before publishing
+        run: cd dist && shasum -a 256 -c sha256sums.txt
+      - name: Create GitHub Release with the full dist set
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" dist/* --title "${{ github.ref_name }}" --generate-notes

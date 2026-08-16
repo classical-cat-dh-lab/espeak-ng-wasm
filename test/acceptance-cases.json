@@ -1,0 +1,120 @@
+{
+  "_meta": {
+    "purpose": "Functional acceptance cases (BUILDING.md, acceptance criterion 2): every string must synthesize without error, with non-silent PCM (RMS above threshold) and plausible duration.",
+    "gold-set": "aeneid-1-1..7: Aeneid I.1–7 gold standard. Lab-derived IPA per the frozen G2P rules v1.0.2 (2026-08-16), over the macron base text of David Chamberlain (ed.), \"Vergil's Aeneid with Macrons and Metrical Scansion\", hypotactic.com (CC BY 4.0). Do not edit independently — the gold source of truth lives in the lab workspace and changes only by academic adjudication.",
+    "derived-set": "derived-*: synthetic cases exercising every la.json mapping rule (diphthongs, aspirates, geminates, long/tense/lax vowels, labiovelars, secondary stress, hiatus vs diphthong, cui/huic).",
+    "frozen": "2026-08-16"
+  },
+  "cases": [
+    {
+      "id": "aeneid-1-1",
+      "set": "gold",
+      "ipa": "ˈar.ma wɪˈrʊm.kʷɛ ˈka.noː ˈtrɔj.jaɪ̯ kʷiː ˈpriː.mʊ.sa.ˈboː.riːs"
+    },
+    {
+      "id": "aeneid-1-2",
+      "set": "gold",
+      "ipa": "iː.ˈta.li.am ˈfaː.toː ˈprɔ.fʊ.ɡʊs laː.wiː.ˈnja.kʷɛ ˈweː.nɪt"
+    },
+    {
+      "id": "aeneid-1-3",
+      "set": "gold",
+      "ipa": "ˈliː.tɔ.ra ˈmʊlt ˈɪlː.ɛt ˈtɛrː.iːs jakˈtaː.tʊ.sɛ.ˈtal.toː"
+    },
+    {
+      "id": "aeneid-1-4",
+      "set": "gold",
+      "ipa": "ˈwiː ˈsʊ.pɛ.rʊm ˈsaɪ̯.waɪ̯ ˈmɛ.mɔ.rɛm juː.ˈnoː.nɪ.sɔ.ˈbiː.ram"
+    },
+    {
+      "id": "aeneid-1-5",
+      "set": "gold",
+      "ipa": "ˈmʊl.ta ˈkʷɔ.kʷɛt ˈbɛlː.oː ˈpasː.ʊs dʊm ˈkɔn.dɛ.rɛ.ˈtʊr.bɛm"
+    },
+    {
+      "id": "aeneid-1-6",
+      "set": "gold",
+      "ipa": "iːn.fɛrː.ˈɛt.kʷɛ ˈdɛ.oːs ˈla.tɪ.oː ˈɡɛ.nʊ.ˈsʊn.dɛ la.ˈtiː.nʊm"
+    },
+    {
+      "id": "aeneid-1-7",
+      "set": "gold",
+      "ipa": "al.baː.ˈniː.kʷɛ ˈpa.treːs at.ˈkʷal.taɪ̯ ˈmoɪ̯.nɪ.a ˈroː.maɪ̯"
+    },
+    {
+      "id": "derived-diphthongs",
+      "set": "derived",
+      "ipa": "ˈaɪ̯ ˈaʊ̯ ˈeɪ̯ ˈeʊ̯ ˈoɪ̯"
+    },
+    {
+      "id": "derived-aspirates",
+      "set": "derived",
+      "ipa": "pʰɪ.lɔ.ˈsɔ.pʰɪ.a ˈtʰɛ.a.trʊm ˈkʰɔ.rʊs"
+    },
+    {
+      "id": "derived-geminates-p-t-k",
+      "set": "derived",
+      "ipa": "ˈɔpː.pɪ.dʊm ˈɡʊtː.ta ˈsɪkː.kʊs"
+    },
+    {
+      "id": "derived-geminates-b-d-g",
+      "set": "derived",
+      "ipa": "ˈɔbː.ba ˈadː.dɔ ˈaɡː.ɡɛr ˈagː.gɛr"
+    },
+    {
+      "id": "derived-geminates-m-n-f",
+      "set": "derived",
+      "ipa": "ˈmamː.ma ˈanː.nʊs ˈɔfː.fa"
+    },
+    {
+      "id": "derived-geminates-s-l-r",
+      "set": "derived",
+      "ipa": "ˈpasː.sʊs ˈbɛlː.lʊm ˈtɛrː.ra"
+    },
+    {
+      "id": "derived-long-vowels",
+      "set": "derived",
+      "ipa": "ˈfaː.tʊm ˈfeː.tʊs ˈwiː.wɔ ˈnoː.mɛn ˈluː.na ˈhyː.dra"
+    },
+    {
+      "id": "derived-tense-short-vowels",
+      "set": "derived",
+      "ipa": "ˈe.mit ˈi.tɛr ˈo.kʊ.lʊs ˈu.lʊ.la ˈty.ran.nʊs"
+    },
+    {
+      "id": "derived-nasal-velar-h-r-j",
+      "set": "derived",
+      "ipa": "ˈlɔŋ.ɡʊs ˈha.bɛt ˈra.tɪ.o ˈjʊ.ɡʊm"
+    },
+    {
+      "id": "derived-labiovelar-gw-z",
+      "set": "derived",
+      "ipa": "ˈlɪŋ.ɡʷa ˈzdɛ.ta"
+    },
+    {
+      "id": "derived-secondary-stress",
+      "set": "derived",
+      "ipa": "ˌɛ.kʷɪ.ˈtaː.tʊs"
+    },
+    {
+      "id": "derived-hiatus",
+      "set": "derived",
+      "ipa": "ˈdɛ.ʊs ˈmɛ.ʊm"
+    },
+    {
+      "id": "derived-cui-huic",
+      "set": "derived",
+      "ipa": "ˈkʊj ˈhʊj"
+    },
+    {
+      "id": "derived-final-clusters",
+      "set": "derived",
+      "ipa": "ˈɔs.tɪ.a ˈɡʊs.tʊs ˈmɔrs"
+    },
+    {
+      "id": "derived-intervocalic-jj",
+      "set": "derived",
+      "ipa": "ˈɛj.jʊs ˈʊŋ.kʷɛ"
+    }
+  ]
+}
