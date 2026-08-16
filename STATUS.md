@@ -57,7 +57,9 @@
    compared at release time**, not enforced as a gate yet (audit M-06,
    deliberate): the measured native toolchain is recorded in `manifest.json`
    so any divergence is diagnosable. If a mismatch ever shows up, the
-   fallback is a pinned build container.
+   fallback is a pinned build container. First reading (v0.1.1, 2026-08-16):
+   CI ubuntu-24.04 artifact vs local macOS arm64 dist — `sha256sums.txt`
+   **byte-identical** across all eight files.
 3. **Very long single-call utterances (> ~100 phonemes, > ~16 s of audio)
    show platform-dependent prosody realization** — same phonemes and timing
    (sample counts match to within a handful of samples), different pitch
