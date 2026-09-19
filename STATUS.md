@@ -1,7 +1,8 @@
 # Project Status (STATUS.md)
 
 > Snapshot for maintainers and contributors. Updated at each milestone.
-> Current as of: 2026-08-16 (**v0.1.1 released 2026-08-16**).
+> Runtime baseline: **v0.1.1 released 2026-08-16**.
+> Maintenance documentation reconciled: 2026-09-19; no new runtime release.
 
 ## What works today
 
@@ -24,7 +25,7 @@
   init lifecycle, validated mapping tables (`kind` required). Default mapping
   resolution matches the flat Release layout (`./la.json` next to the driver;
   Node reads it via the filesystem). v0.1.x runs on the main thread; Worker
-  isolation is planned for v0.2 with no API change.
+  isolation is a possible future improvement, not a scheduled v0.2 commitment.
 - **Glue** (`glue.c`): dynamic-growth PCM buffer (60 s initial, doubling,
   300 s hard cap) — the full 500-character contract limit synthesizes at any
   rate (500 × "a" @ rate 80 = 78.7 s, verified against the native glue build:
@@ -51,8 +52,8 @@
 
 1. **Legacy-API reinitialization can report a stale sample rate** on a reused
    WASM module (audit L-02) — unreachable via the stable driver API
-   (terminate → init creates a fresh module); deferred to the v0.2
-   lifecycle/Worker rework, which touches module lifecycle anyway.
+   (terminate → init creates a fresh module). Revisit only if a concrete consumer
+   need or separately scoped lifecycle change makes that legacy path relevant.
 2. **Cross-platform checksum equivalence (CI ubuntu vs local macOS) is
    compared at release time**, not enforced as a gate yet (audit M-06,
    deliberate): the measured native toolchain is recorded in `manifest.json`
@@ -76,14 +77,13 @@
 
 ## Roadmap
 
-- **v0.2**: Web Worker isolation (no API change); legacy-init sample-rate
-  fix (gap 1); streaming evaluation.
-- **Per-language packs**: additional voices are a few KB each
-  (e.g. `lang/grk/grc` for Ancient Greek already exists upstream) — extend
-  `trim-data.sh`, add a mapping table, pass `voice` at `init()`.
-- **Extended phoneme inventories** (e.g. PIE laryngeals): not in upstream's
-  phoneme table; would need either mapping-level approximations or a
-  phsource extension (heavier; deferred).
+Maintain the released build and stable driver for demonstrated consumer needs.
+Worker isolation, lifecycle redesign, streaming and additional language packs have
+no committed version or delivery schedule. A future change needs a concrete use
+case, bounded scope and compatibility verification.
+
+Extended phoneme inventories may require an explicit approximation or upstream
+phoneme work. They are not promised by the current Latin release.
 
 ## Hard-won build lessons (all encoded in BUILDING.md)
 

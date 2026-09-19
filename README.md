@@ -31,7 +31,8 @@ This repository provides:
    `.wasm` + `.data` artifacts.
 2. A **minimal modern driver** (`espeak-wasm-driver.js`): PCM retrieval via the C
    API, playback through `AudioBufferSourceNode` — no deprecated APIs. v0.1.x runs
-   on the main thread; Web Worker isolation is planned for v0.2 with no API change.
+   on the main thread. Worker isolation is a possible separately scoped improvement,
+   not a scheduled version commitment.
 3. A **trimmed data package**: phoneme synthesis tables only, no per-language
    dictionaries (phoneme-input mode bypasses them), targeting ≤ 4 MB total.
 4. **Checksummed releases** (`sha256sums.txt`) so downstream projects can vendor

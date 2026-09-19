@@ -62,8 +62,8 @@ options = {
   voice is set; a failed init tears down its half-built module and leaves the
   driver re-initializable. Must resolve before any other call.
 - v0.1.x loads the engine on the **main thread** (a verse synthesizes in
-  ~10–50 ms, imperceptible behind a user gesture). Web Worker isolation is
-  planned for v0.2 with **no API change**.
+  ~10–50 ms on the recorded short-verse checks). Web Worker isolation is
+  a possible separately scoped improvement, not a scheduled release commitment.
 
 ### `synthesize(ipa, options?) → Promise<SynthesisResult>`
 
@@ -167,8 +167,8 @@ options = {
   total footprint ≤ 4 MB (pre-gzip) is a release acceptance criterion.
 - v0.1.x runs on the main thread: PCM is copied out of wasm memory into a JS
   `Int16Array` per call. No `SharedArrayBuffer`, no cross-origin isolation
-  requirement. (Worker isolation with transferable buffers is a v0.2 design
-  topic.)
+  requirement. (A future Worker boundary would require separate buffer-ownership and
+  compatibility verification; no version is scheduled.)
 - GPLv3: vendoring these artifacts makes phoneme-synthesis functionality a derivative
   work of eSpeak NG — keep the LICENSE file alongside the vendored files and credit
   upstream in your About page.
@@ -190,5 +190,5 @@ options = {
     an undocumented 60 s ceiling that contract-valid input (500 characters at
     rate 80) could exceed.
   - `terminate()` and §7 wording corrected to the main-thread reality (the
-    v0.1.0 text referred to a Worker that only lands in v0.2).
+    v0.1.0 text incorrectly described a Worker; v0.1.x uses the main thread).
 - **v0.1.0** (2026-08-13) — initial freeze.
